@@ -2,6 +2,10 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 def createMachinaLogger(filePath: str, modName: str = __name__) -> logging.Logger:
+    """
+    utility function for creating a standard logger
+    """
+
     #create logger based on module name parameter
     logger = logging.getLogger(modName)
 

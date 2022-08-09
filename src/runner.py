@@ -28,20 +28,18 @@ def main() -> int:
     logger = createMachinaLogger("runner.log") 
     #setup signal handler to handle ctl+c from keyboard (or any other proc)
     signal.signal(signal.SIGINT, sigHandler)
+
     if args.server:
-        server = Server(args.filename, args.host, args.port)
-        server.run()
-        while not sigCaught:
-            sleep(0.5)
-        server.stop()
+        netObj = Server(args.filename, args.host, args.port)
     elif args.client:
-        client = Client("/tmp/output.stl", args.host, args.port)
-        client.run()
-        while not sigCaught:
-            sleep(0.5)
-        client.stop()
+        netObj = Client(args.filename, args.host, args.port)
     else:
-        print(f"Must specify either client or server")
+        print("Must specify either client or server")
+    
+    netObj.run()
+    while not sigCaught:
+        sleep(0.5)
+    netObj.stop()
 
 if __name__ == "__main__":
     exitStatus = main()

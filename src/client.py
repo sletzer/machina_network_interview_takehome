@@ -8,10 +8,18 @@ from machinalogger import createMachinaLogger
 from preamble import Preamble
 
 class Client:
+    """
+    A Client that will receive a file and its accompanying metadata
+    in order to create a local copy from the remote source.
+
+    Given in the spec, the client shall also deconstruct the stl file
+    into a vertices csv file.
+    """
+
     def __init__(self, fileName: str, host: str, port: str):
         self.outFileName = fileName
-        self.netSockThread = threading.Thread(target=self.runNetSockImpl, args=(host, port))
-        self.zmqThread = threading.Thread(target=self.runZMQImpl, args=(host, port))
+        self.netSockThread = threading.Thread(target=self.runNetSockImpl, args=(host, port), daemon=True)
+        self.zmqThread = threading.Thread(target=self.runZMQImpl, args=(host, port), daemon=True)
         self.logger = createMachinaLogger("client.log")
     
     def run(self):
@@ -26,32 +34,37 @@ class Client:
         #listen, bind, accept, pass preamble + actual file
         self.logger.info(f"About to create socket")
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            #set non blocking, so we can quit if need be
-            s.setblocking(False)
-            while (s.connect_ex((host, int(port))) and self.running):
-                sleep(0.5)
+            s.connect((host, int(port)))
+            self.logger.info(f"Successfully connected to {host}:{port}")
             while (self.running):
-                readIO, writeIO, _ = select([s], [s], [], 1.0)
+                #python3 differentiates between bytes and string objects
+                jsonBlob = s.recv(4096)
+                #'cast' jsonBlob into ascii via decode method and then create json str
+                jsonMap = json.loads(jsonBlob.decode('utf-8'))
+                self.logger.debug(f"Preamble metadata received: {jsonMap}")
+                
+                #send an ACK equivalent to suggest to the server we are ready
+                #for the main stl file
+                s.send(jsonBlob)
 
-                if len(readIO) > 0:
-                    print("readIO is rdy")
-                    jsonBlob = s.recv(4096)
-                    jsonStr = json.loads(jsonBlob.decode('utf-8'))
-                    print(jsonStr)
-                    
-                    #send an ACK equivalent to suggest to the server we are ready
-                    s.send(jsonBlob)
-
-                    with open(self.outFileName, "wb") as outFile:
-                        #now read the actual file
-                        bufSize = 2**16
+                with open(self.outFileName, "wb") as outFile:
+                    #now read the actual file
+                    bufSize = 2**16
+                    bytesRx = s.recv(bufSize)
+                    while (bytesRx):
+                        outFile.write(bytesRx)
                         bytesRx = s.recv(bufSize)
-                        while (bytesRx > 0):
-                            outFile.write(bytesRx)
-                            bytesRx = s.recv(bufSize)
-                if len(writeIO) > 0:
-                    print("writeIO is ready")
-                sleep(1)
+                #now verify cksum and filesize match the preamble data
+                expectedPreamble = Preamble.from_json(jsonBlob.decode('utf-8'))
+                currentPreamble = Preamble(self.outFileName)
+                currentPreamble.generatePreamble()
+                if not expectedPreamble == currentPreamble:
+                    self.logger.error(f"Preamble and outfile metadata do not match! expected: {expectedPreamble} written: {currentPreamble}")
+                else:
+                    print("Done!")
+                    self.logger.info(f"File successfully saved to {self.outFileName}")
+                s.shutdown(socket.SHUT_RDWR)
+                break
 
     def runZMQImpl(self, host: str, port: str):
         #run zeromq stuff?
