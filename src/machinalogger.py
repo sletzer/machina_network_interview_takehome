@@ -1,7 +1,7 @@
 import logging
 from logging.handlers import RotatingFileHandler
 
-def createMachinaLogger(modName: str, filePath: str) -> logging.Logger:
+def createMachinaLogger(filePath: str, modName: str = __name__) -> logging.Logger:
     #create logger based on module name parameter
     logger = logging.getLogger(modName)
 
