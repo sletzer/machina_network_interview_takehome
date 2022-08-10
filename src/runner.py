@@ -37,7 +37,7 @@ def main() -> int:
         print("Must specify either client or server")
     
     netObj.run()
-    while not sigCaught:
+    while not sigCaught and netObj.isRunning():
         sleep(0.5)
     netObj.stop()
 

@@ -2,8 +2,10 @@ import os
 from select import select
 import socket
 import threading
+from unittest import runner
 from machinalogger import createMachinaLogger
 from preamble import Preamble
+import zmq
 
 
 class Server:
@@ -31,6 +33,9 @@ class Server:
 
     def stop(self):
         self.running = False
+
+    def isRunning(self):
+        return self.running == True
 
     def runNetSockImpl(self, host: str, port: str):
         #listen, bind, accept, pass preamble + actual file
@@ -67,7 +72,50 @@ class Server:
                         self.logger.debug(f"sent {self.txFileName} successfully to {addr}")
                         conn.close()
                     self.logger.debug(f"client {conn} has quit the connection")
+                    print("Done! - TX")
 
     def runZMQImpl(self, host: str, port: str):
-        #run zeromq stuff?
-        pass
+        ctx = zmq.Context()
+        dealer = ctx.socket(zmq.DEALER)
+
+        dealer.connect("tcp://" + host + ":" + "8091")
+        self.logger.debug("ZeroMQ connected")
+
+        #announce our existence
+        dealer.send(b"fetch")
+
+        #receive the preamble
+        jsonBlob = dealer.recv()
+        #jsonBlob = dealer.recv_multipart()
+        expectedPreamble = Preamble.from_json(jsonBlob.decode('utf-8'))
+
+        #ACK back
+        dealer.send(jsonBlob)
+
+        with open("/tmp/output_server.stl", "wb") as outFile:
+            total = 0
+            chunks = 0
+            while(self.running):
+                chunk = dealer.recv()
+                chunks += 1
+                size = len(chunk)
+                total += size
+                if size == 0:
+                    #whole file is recieved
+                    break
+                bytesWritten = outFile.write(chunk)
+                if bytesWritten < size:
+                    self.logger.error(f"Short write on {outFile} only {bytesWritten}/{size}... aborting")
+                    self.running = 0
+                    ctx.term()
+                    return
+        
+        currPreamble = Preamble("/tmp/output.stl")
+        currPreamble.generatePreamble()
+
+        if not currPreamble == expectedPreamble:
+            self.logger.error("File download corrupted, aborting...")
+            print("Failed")
+        else:
+            print("Done! - RX")
+        self.running = False
