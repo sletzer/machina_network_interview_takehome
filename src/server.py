@@ -2,7 +2,6 @@ import os
 from select import select
 import socket
 import threading
-from unittest import runner
 from machinalogger import createMachinaLogger
 from preamble import Preamble
 import zmq
@@ -17,13 +16,13 @@ class Server:
     """    
 
     #default arguments
-    HOST = socket.gethostbyname("localhost") 
-    PORT = 0 #any port number, we don't care
+    HOST = "127.0.0.1" 
+    PORT = "0" #any port number, we don't care
 
-    def __init__(self, fileName: str, host: str = HOST, port: str = PORT):
+    def __init__(self, fileName: str, host: str = HOST, port: str = PORT, rhost: str = HOST):
         self.txFileName = fileName
         self.netSockThread = threading.Thread(target=self.runNetSockImpl, args=(host, port), daemon=True)
-        self.zmqThread = threading.Thread(target=self.runZMQImpl, args=(host, port), daemon=True)
+        self.zmqThread = threading.Thread(target=self.runZMQImpl, args=(rhost, "8091"), daemon=True)
         self.logger = createMachinaLogger("server.log")
     
     def run(self):
@@ -78,7 +77,7 @@ class Server:
         ctx = zmq.Context()
         dealer = ctx.socket(zmq.DEALER)
 
-        dealer.connect("tcp://" + host + ":" + "8091")
+        dealer.connect("tcp://" + host + ":" + port)
         self.logger.debug("ZeroMQ connected")
 
         #announce our existence
@@ -92,7 +91,7 @@ class Server:
         #ACK back
         dealer.send(jsonBlob)
 
-        with open("/tmp/output_server.stl", "wb") as outFile:
+        with open("output.stl", "wb") as outFile:
             total = 0
             chunks = 0
             while(self.running):
@@ -110,7 +109,7 @@ class Server:
                     ctx.term()
                     return
         
-        currPreamble = Preamble("/tmp/output.stl")
+        currPreamble = Preamble("output.stl")
         currPreamble.generatePreamble()
 
         if not currPreamble == expectedPreamble:
@@ -118,4 +117,5 @@ class Server:
             print("Failed")
         else:
             print("Done! - RX")
+        dealer.close()
         self.running = False

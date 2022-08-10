@@ -93,7 +93,7 @@ class Client:
         #else, we have successfully downloaded the file
         #and are ready to return to sender
         router.set_hwm(0)
-        router.bind("tcp://" + host + ":" + "8091")
+        router.bind("tcp://*:" + "8091")
 
         #get server's identity
         identity, command = router.recv_multipart()
@@ -116,5 +116,6 @@ class Client:
                 router.send_multipart([identity, data])
                 if not data:
                     break
+        router.close()
         print("Done! - TX")
         self.running = False

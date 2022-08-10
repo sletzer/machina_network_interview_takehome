@@ -1,4 +1,4 @@
-#!/bin/env python3
+#!/usr/bin/env python3
 import os
 import argparse
 import signal
@@ -12,8 +12,9 @@ parser = argparse.ArgumentParser(description="A simple server/client program to 
 parser.add_argument("-s", "--server", help="Start the server process", action='store_true')
 parser.add_argument("-c", "--client", help="Start the client process", action='store_true')
 parser.add_argument("-f", "--filename", help="The file to be delivered to the client (if the server) or where to write the file that is being received (if the client)", required=True)
-parser.add_argument("-H", "--host", help="The host IP address (to bind to for server, connect to for client", required=True)
+parser.add_argument("-H", "--host", help="The host IP address (to bind to for server, connect to for client)", required=True)
 parser.add_argument("-p", "--port", help="port (for server to listen on, for client to connect to)", required=True)
+parser.add_argument("--remotehost", help="The remote IP of the machine running in client mode", default="127.0.0.1")
 
 args = parser.parse_args()
 
@@ -24,17 +25,16 @@ def sigHandler(signum, frame):
     sigCaught = True
 
 def main() -> int:
-    #create logger
-    logger = createMachinaLogger("runner.log") 
     #setup signal handler to handle ctl+c from keyboard (or any other proc)
     signal.signal(signal.SIGINT, sigHandler)
 
     if args.server:
-        netObj = Server(args.filename, args.host, args.port)
+        netObj = Server(args.filename, args.host, args.port, args.remotehost)
     elif args.client:
         netObj = Client(args.filename, args.host, args.port)
     else:
         print("Must specify either client or server")
+        return 255
     
     netObj.run()
     while not sigCaught and netObj.isRunning():
